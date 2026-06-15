@@ -6,6 +6,8 @@ import PrescriptionMode from '@/views/PrescriptionMode.vue'
 import PrescriptionReviewMode from '@/views/PrescriptionReviewMode.vue'
 import MentorMode from '@/views/MentorMode.vue'
 import MentorReviewMode from '@/views/MentorReviewMode.vue'
+import ClinicMode from '@/views/ClinicMode.vue'
+import ClinicReviewMode from '@/views/ClinicReviewMode.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -55,6 +57,18 @@ const router = createRouter({
       name: 'mentor-review',
       component: MentorReviewMode,
       meta: { title: '成长记录' }
+    },
+    {
+      path: '/clinic',
+      name: 'clinic',
+      component: ClinicMode,
+      meta: { title: '药房接诊' }
+    },
+    {
+      path: '/clinic-review',
+      name: 'clinic-review',
+      component: ClinicReviewMode,
+      meta: { title: '接诊记录' }
     }
   ]
 })

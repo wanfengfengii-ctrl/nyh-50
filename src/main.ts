@@ -5,6 +5,7 @@ import App from './App.vue'
 import router from './router'
 import './styles/main.css'
 import { useMentorStore } from './stores/mentor'
+import { useClinicStore } from './stores/clinic'
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -15,5 +16,8 @@ app.use(naive)
 
 const mentorStore = useMentorStore()
 mentorStore.init()
+
+const clinicStore = useClinicStore()
+clinicStore.init()
 
 app.mount('#app')

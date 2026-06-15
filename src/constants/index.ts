@@ -7,7 +7,10 @@ import type {
   MentorDifficulty,
   MentorHerbQuestion,
   ApprenticeAchievement,
-  ApprendiceSkillRecord
+  ApprendiceSkillRecord,
+  UrgencyLevel,
+  ClinicRating,
+  Symptom
 } from '@/types'
 
 export const WEIGHTS: Weight[] = [
@@ -691,3 +694,163 @@ export const APPRENTICE_TITLES: { level: number; title: string }[] = [
 
 export const XP_PER_LEVEL = 500
 export const VOICE_ENABLED_DEFAULT = true
+
+export const URGENCY_CONFIG: Record<UrgencyLevel, {
+  label: string
+  description: string
+  color: string
+  bgColor: string
+  priorityWeight: number
+  timeMultiplier: number
+  scoreMultiplier: number
+  xpMultiplier: number
+}> = {
+  mild: {
+    label: '轻症',
+    description: '病情轻微，可从容处理',
+    color: '#2E8B57',
+    bgColor: '#E8F5E9',
+    priorityWeight: 1,
+    timeMultiplier: 1.5,
+    scoreMultiplier: 1.0,
+    xpMultiplier: 1.0
+  },
+  moderate: {
+    label: '中症',
+    description: '病情一般，需及时处理',
+    color: '#DAA520',
+    bgColor: '#FFF8DC',
+    priorityWeight: 2,
+    timeMultiplier: 1.2,
+    scoreMultiplier: 1.3,
+    xpMultiplier: 1.3
+  },
+  severe: {
+    label: '重症',
+    description: '病情较重，需优先处理',
+    color: '#DC143C',
+    bgColor: '#FFF0F5',
+    priorityWeight: 3,
+    timeMultiplier: 0.9,
+    scoreMultiplier: 1.6,
+    xpMultiplier: 1.8
+  },
+  critical: {
+    label: '急症',
+    description: '病情危急，需立即处理',
+    color: '#8B0000',
+    bgColor: '#FFE4E1',
+    priorityWeight: 4,
+    timeMultiplier: 0.6,
+    scoreMultiplier: 2.0,
+    xpMultiplier: 2.5
+  }
+}
+
+export const SYMPTOMS: Symptom[] = [
+  { id: 's1', name: '面色萎黄', description: '面色发黄，无光泽' },
+  { id: 's2', name: '头晕目眩', description: '头晕眼花，视物旋转' },
+  { id: 's3', name: '心悸失眠', description: '心跳不安，难以入睡' },
+  { id: 's4', name: '神疲乏力', description: '精神疲倦，浑身无力' },
+  { id: 's5', name: '气短懒言', description: '呼吸短促，不想说话' },
+  { id: 's6', name: '食欲不振', description: '胃口不好，不想吃饭' },
+  { id: 's7', name: '腹胀便溏', description: '腹部胀满，大便稀溏' },
+  { id: 's8', name: '视物模糊', description: '看东西不清楚' },
+  { id: 's9', name: '腰膝酸软', description: '腰部和膝部酸软无力' },
+  { id: 's10', name: '口干咽燥', description: '口腔咽喉干燥' },
+  { id: 's11', name: '五心烦热', description: '两手两足心发热，心胸烦热' },
+  { id: 's12', name: '潮热盗汗', description: '午后发热，夜间出汗' },
+  { id: 's13', name: '咳嗽少痰', description: '咳嗽但痰少' },
+  { id: 's14', name: '咽喉肿痛', description: '喉咙红肿疼痛' },
+  { id: 's15', name: '头痛恶寒', description: '头痛且怕冷' },
+  { id: 's16', name: '发热汗出', description: '身体发热，出汗' },
+  { id: 's17', name: '关节疼痛', description: '四肢关节疼痛' },
+  { id: 's18', name: '月经不调', description: '月经周期或经量异常' },
+  { id: 's19', name: '痛经', description: '经期腹部疼痛' },
+  { id: 's20', name: '乳汁不足', description: '产后乳汁分泌少' }
+]
+
+export const PATIENT_FIRST_NAMES = ['张', '王', '李', '赵', '刘', '陈', '杨', '黄', '周', '吴', '徐', '孙', '马', '朱', '胡']
+export const PATIENT_LAST_NAMES = ['伟', '芳', '娜', '敏', '静', '丽', '强', '磊', '军', '洋', '勇', '艳', '杰', '娟', '涛']
+
+export const DISEASE_TEMPLATES: {
+  id: string
+  name: string
+  description: string
+  prescriptionId: number
+  symptomIds: string[]
+  caseDescriptions: string[]
+  requirements: string[]
+}[] = [
+  {
+    id: 'd1',
+    name: '血虚证',
+    description: '血液亏虚，脏腑百脉失养',
+    prescriptionId: 1,
+    symptomIds: ['s1', 's2', 's3', 's4'],
+    caseDescriptions: [
+      '患者久病体虚，失血过多，导致血虚气弱，需补血养气',
+      '患者产后失血，面色萎黄，头晕心悸，宜补气生血',
+      '患者劳倦内伤，气血不足，神疲乏力，当以补血为先'
+    ],
+    requirements: [
+      '以补血为主，补气为辅',
+      '当归重用，黄芪佐之',
+      '补气生血，阳生阴长'
+    ]
+  },
+  {
+    id: 'd2',
+    name: '脾胃气虚证',
+    description: '脾胃虚弱，运化失常',
+    prescriptionId: 2,
+    symptomIds: ['s4', 's5', 's6', 's7'],
+    caseDescriptions: [
+      '患者饮食不节，损伤脾胃，运化失司，需健脾益气',
+      '患者久病体虚，脾胃虚弱，食欲不振，宜益气健脾',
+      '患者劳倦过度，脾气亏虚，腹胀便溏，当补中气'
+    ],
+    requirements: [
+      '健脾益气为主',
+      '人参为君，黄芪为辅',
+      '甘草调和诸药'
+    ]
+  },
+  {
+    id: 'd3',
+    name: '肝肾阴虚证',
+    description: '肝肾阴液亏虚，虚热内扰',
+    prescriptionId: 3,
+    symptomIds: ['s8', 's9', 's10', 's11'],
+    caseDescriptions: [
+      '患者年老体弱，肝肾不足，视物昏花，需滋补肝肾',
+      '患者久病耗阴，肝肾阴虚，腰膝酸软，宜滋肾养肝',
+      '患者劳欲过度，阴精亏虚，口干咽燥，当滋阴明目'
+    ],
+    requirements: [
+      '滋补肝肾，益精明目',
+      '枸杞为君，当归养血',
+      '人参益气，甘草调和'
+    ]
+  }
+]
+
+export const CLINIC_RATING_CONFIG: Record<ClinicRating, {
+  label: string
+  color: string
+  minScore: number
+  description: string
+}> = {
+  S: { label: '国医圣手', color: '#FFD700', minScore: 95, description: '诊断精准，用药如神，堪称国手' },
+  A: { label: '杏林名医', color: '#C0C0C0', minScore: 85, description: '医术高明，辨证准确，疗效显著' },
+  B: { label: '坐堂郎中', color: '#CD7F32', minScore: 70, description: '医术不错，诊疗规范，可独当一面' },
+  C: { label: '药铺学徒', color: '#4682B4', minScore: 60, description: '初窥门径，有待提高，继续努力' },
+  D: { label: '门外汉', color: '#808080', minScore: 0, description: '还需多多学习，打牢基础' }
+}
+
+export const CLINIC_SCORE_WEIGHTS = {
+  priorityJudgment: 20,
+  prescriptionSelection: 30,
+  weighingAccuracy: 35,
+  speedEfficiency: 15
+}

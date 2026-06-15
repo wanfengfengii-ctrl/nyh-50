@@ -19,7 +19,106 @@ export interface Herb {
   color: string
 }
 
-export type GameMode = 'free' | 'challenge' | 'review' | 'prescription' | 'prescription-review' | 'mentor' | 'mentor-review'
+export type GameMode = 'free' | 'challenge' | 'review' | 'prescription' | 'prescription-review' | 'mentor' | 'mentor-review' | 'clinic' | 'clinic-review'
+
+export type UrgencyLevel = 'mild' | 'moderate' | 'severe' | 'critical'
+
+export type ClinicPhase = 
+  | 'select_order'
+  | 'judge_priority'
+  | 'select_prescription'
+  | 'weighing'
+  | 'submit'
+  | 'result'
+
+export type ClinicRating = 'S' | 'A' | 'B' | 'C' | 'D'
+
+export interface Symptom {
+  id: string
+  name: string
+  description: string
+}
+
+export interface ClinicOrder {
+  id: string
+  patientName: string
+  patientAge: number
+  patientGender: '男' | '女'
+  symptoms: Symptom[]
+  urgencyLevel: UrgencyLevel
+  correctPriority: number
+  correctPrescriptionId: number
+  diseaseName: string
+  prescriptionRequirement: string
+  caseDescription: string
+  timeLimit: number
+  createdAt: number
+}
+
+export interface ClinicPriorityJudgment {
+  selectedPriority: number | null
+  isCorrect: boolean | null
+  timeSpent: number
+}
+
+export interface ClinicPrescriptionSelection {
+  selectedPrescriptionId: number | null
+  isCorrect: boolean | null
+  timeSpent: number
+}
+
+export interface ClinicHerbResult {
+  herbId: string
+  herbName: string
+  targetWeight: number
+  finalWeight: number
+  finalError: number
+  allowedError: number
+  score: number
+  isPerfect: boolean
+  skipped: boolean
+  timeSpent: number
+}
+
+export interface ClinicSessionResult {
+  id: string
+  order: ClinicOrder
+  startTime: number
+  endTime: number
+  totalTime: number
+  totalScore: number
+  maxScore: number
+  scorePercentage: number
+  priorityJudgment: ClinicPriorityJudgment
+  prescriptionSelection: ClinicPrescriptionSelection
+  herbResults: ClinicHerbResult[]
+  skippedCount: number
+  perfectCount: number
+  averageError: number
+  rating: ClinicRating
+  xpEarned: number
+  skillsImproved: string[]
+  caseReview: ClinicCaseReview
+}
+
+export interface ClinicCaseReview {
+  summary: string
+  correctDecision: string
+  userDecision: string
+  decisionAnalysis: string
+  highlights: string[]
+  weakPoints: string[]
+  suggestions: string[]
+  knowledgePoints: string[]
+}
+
+export interface ClinicHistoryRecord {
+  id: string
+  timestamp: number
+  type: 'priority_judge' | 'prescription_select' | 'add_weight' | 'remove_weight' | 'adjust_herb' | 'switch_herb' | 'complete_herb' | 'submit'
+  description: string
+  details?: Record<string, any>
+}
 
 export type MentorStepType = 
   | 'select_prescription'

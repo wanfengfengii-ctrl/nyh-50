@@ -49,7 +49,9 @@ import {
   TrophyOutline, 
   BookOutline,
   CheckmarkCircleOutline,
-  RefreshOutline
+  RefreshOutline,
+  AlertCircleOutline,
+  TimeOutline
 } from '@vicons/ionicons5'
 
 const route = useRoute()
@@ -62,9 +64,11 @@ const tabs = [
   { path: '/challenge', label: '限时挑战', icon: TrophyOutline },
   { path: '/prescription', label: '处方配伍', icon: RefreshOutline },
   { path: '/mentor', label: '师徒教学', icon: BookOutline },
+  { path: '/clinic', label: '药房接诊', icon: AlertCircleOutline },
   { path: '/review', label: '错题复盘', icon: BookOutline },
   { path: '/prescription-review', label: '处方复盘', icon: CheckmarkCircleOutline },
-  { path: '/mentor-review', label: '成长记录', icon: TrophyOutline }
+  { path: '/mentor-review', label: '成长记录', icon: TrophyOutline },
+  { path: '/clinic-review', label: '接诊记录', icon: TimeOutline }
 ]
 
 function goTo(path: string) {
