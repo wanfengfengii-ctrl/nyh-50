@@ -26,7 +26,7 @@ import {
   APPRENTICE_TITLES,
   XP_PER_LEVEL
 } from '@/constants'
-import { speakStepInstruction, speakFeedback, stopSpeaking } from '@/utils/speech'
+import { speakStepInstruction, speakFeedback, stopSpeaking, isVoiceEnabled } from '@/utils/speech'
 
 let feedbackCounter = 0
 
@@ -379,6 +379,32 @@ export const useMentorStore = defineStore('mentor', () => {
   function goToNextStep(): void {
     if (currentStepIndex.value < MENTOR_STEPS.length - 1) {
       goToStep(currentStepIndex.value + 1)
+    }
+  }
+
+  function togglePause(): void {
+    if (!isStarted.value || isCompleted.value) return
+    isPaused.value = !isPaused.value
+    if (isPaused.value) {
+      stopSpeaking()
+      addFeedback('info', '已暂停', '学习已暂停，休息一下吧', '点击继续按钮可恢复学习')
+    } else {
+      addFeedback('success', '继续学习', '欢迎回来，继续加油！', '完成当前步骤可获得更高评分')
+      if (isVoiceEnabled.value && currentStep.value) {
+        speakStepInstruction(currentStep.value.title, currentStep.value.instruction)
+      }
+    }
+  }
+
+  function pauseSession(): void {
+    if (!isPaused.value) {
+      togglePause()
+    }
+  }
+
+  function resumeSession(): void {
+    if (isPaused.value) {
+      togglePause()
     }
   }
 
@@ -1045,6 +1071,9 @@ export const useMentorStore = defineStore('mentor', () => {
     setDifficulty,
     selectPrescription,
     startSession,
+    togglePause,
+    pauseSession,
+    resumeSession,
     goToStep,
     goToNextStep,
     skipCurrentStep,

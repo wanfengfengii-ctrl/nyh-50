@@ -1,7 +1,29 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { VOICE_ENABLED_DEFAULT } from '@/constants'
 
-export const isVoiceEnabled = ref(VOICE_ENABLED_DEFAULT)
+const VOICE_STORAGE_KEY = 'scaleTrainer_voiceEnabled'
+
+function loadVoiceState(): boolean {
+  try {
+    const stored = localStorage.getItem(VOICE_STORAGE_KEY)
+    if (stored !== null) {
+      return stored === 'true'
+    }
+  } catch (e) {
+    console.error('Failed to load voice state:', e)
+  }
+  return VOICE_ENABLED_DEFAULT
+}
+
+export const isVoiceEnabled = ref(loadVoiceState())
+
+watch(isVoiceEnabled, (val) => {
+  try {
+    localStorage.setItem(VOICE_STORAGE_KEY, String(val))
+  } catch (e) {
+    console.error('Failed to save voice state:', e)
+  }
+})
 
 let synth: SpeechSynthesis | null = null
 let currentUtterance: SpeechSynthesisUtterance | null = null

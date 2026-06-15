@@ -53,6 +53,19 @@
           <span class="stat-label">累计得分</span>
           <span class="stat-value score-value">{{ mentorStore.sessionTotalScore }}</span>
         </div>
+        <div class="header-actions">
+          <n-button 
+            size="small" 
+            :type="mentorStore.isPaused ? 'success' : 'warning'"
+            @click="handleTogglePause"
+            class="pause-btn"
+          >
+            <template #icon>
+              <n-icon :component="mentorStore.isPaused ? PlayOutline : SadOutline" />
+            </template>
+            {{ mentorStore.isPaused ? '继续学习' : '暂停学习' }}
+          </n-button>
+        </div>
       </div>
     </div>
 
@@ -218,24 +231,27 @@
     </div>
 
     <div v-else class="main-content">
-      <div class="steps-navbar">
-        <div
-          v-for="(step, index) in MENTOR_STEPS"
-          :key="step.id"
-          class="step-nav-item"
-          :class="{
-            active: mentorStore.currentStepIndex === index,
-            completed: isStepCompleted(step.id),
-            skipped: isStepSkipped(step.id)
-          }"
-          @click="handleStepNavClick(index)"
-        >
-          <div class="step-num-circle">
-            {{ isStepCompleted(step.id) ? '✓' : index + 1 }}
+      <div class="workspace-wrapper">
+        <div class="steps-navbar">
+          <div
+            v-for="(step, index) in MENTOR_STEPS"
+            :key="step.id"
+            class="step-nav-item"
+            :class="{
+              active: mentorStore.currentStepIndex === index,
+              completed: isStepCompleted(step.id),
+              skipped: isStepSkipped(step.id),
+              disabled: index > mentorStore.currentStepIndex
+            }"
+            :title="index > mentorStore.currentStepIndex ? '请依次完成前面的步骤' : step.title"
+            @click="handleStepNavClick(index)"
+          >
+            <div class="step-num-circle">
+              {{ isStepCompleted(step.id) ? '✓' : index + 1 }}
+            </div>
+            <span class="step-nav-title">{{ step.title.replace(/第.步：/, '') }}</span>
           </div>
-          <span class="step-nav-title">{{ step.title.replace(/第.步：/, '') }}</span>
         </div>
-      </div>
 
       <div class="workspace">
         <div class="left-panel">
@@ -550,6 +566,21 @@
           </div>
         </div>
       </div>
+
+      <div v-if="mentorStore.isPaused" class="pause-overlay">
+        <div class="pause-content">
+          <div class="pause-icon">⏸️</div>
+          <h3 class="pause-title">学习已暂停</h3>
+          <p class="pause-desc">喝口茶，休息一下再继续吧~</p>
+          <n-button type="primary" size="large" @click="handleTogglePause">
+            <template #icon>
+              <n-icon :component="PlayOutline" />
+            </template>
+            继续学习
+          </n-button>
+        </div>
+      </div>
+      </div>
     </div>
   </div>
 </template>
@@ -630,6 +661,10 @@ function handleVoiceToggle(): void {
   toggleVoice()
 }
 
+function handleTogglePause(): void {
+  mentorStore.togglePause()
+}
+
 function toggleHint(): void {
   showHint.value = !showHint.value
 }
@@ -691,6 +726,8 @@ onMounted(() => {
 .timer { color: #2E8B57; font-weight: bold; }
 .timer.warning { color: #DC143C; animation: pulse 1s infinite; }
 .score-value { color: #DAA520; font-size: 20px; }
+.header-actions { display: flex; align-items: center; margin-left: auto; }
+.pause-btn { min-width: 100px; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 
 .start-screen, .result-screen { max-width: 1400px; margin: 0 auto; }
@@ -748,9 +785,13 @@ onMounted(() => {
 .result-actions { display: flex; justify-content: center; gap: 16px; padding-top: 24px; border-top: 2px dashed #DEB887; flex-wrap: wrap; }
 
 .main-content { max-width: 1600px; margin: 0 auto; }
+.workspace-wrapper { position: relative; }
+
 .steps-navbar { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 20px; background: #FFF8DC; padding: 16px 24px; border-radius: 16px; border: 2px solid #DEB887; overflow-x: auto; }
 .step-nav-item { display: flex; align-items: center; cursor: pointer; flex-shrink: 0; padding: 6px 10px; border-radius: 10px; transition: all 0.2s; }
 .step-nav-item:hover { background: rgba(139,69,19,0.08); }
+.step-nav-item.disabled { cursor: not-allowed; opacity: 0.5; }
+.step-nav-item.disabled:hover { background: transparent; }
 .step-num-circle { width: 30px; height: 30px; border-radius: 50%; background: #DEB887; color: #6B4423; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; margin-right: 8px; }
 .step-nav-item.active .step-num-circle { background: #8B4513; color: #FFF8DC; box-shadow: 0 0 0 3px rgba(139,69,19,0.2); }
 .step-nav-item.completed .step-num-circle { background: #2E8B57; color: #FFF; }
@@ -898,4 +939,41 @@ onMounted(() => {
 .step-progress-icon { font-size: 12px; }
 .step-progress-name { flex: 1; font-size: 12px; color: #4A2C17; }
 .step-progress-score { font-size: 11px; color: #6B4423; font-weight: 600; }
+
+.pause-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(139, 69, 19, 0.85);
+  backdrop-filter: blur(8px);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.pause-content {
+  text-align: center;
+  color: #FFF8DC;
+}
+
+.pause-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.pause-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+}
+
+.pause-desc {
+  font-size: 16px;
+  margin: 0 0 24px 0;
+  opacity: 0.85;
+}
 </style>
