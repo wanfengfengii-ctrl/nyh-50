@@ -3,6 +3,8 @@ import { ref, computed } from 'vue'
 import type { GameMode, ChallengeQuestion, ReviewItem, Weight, Herb } from '@/types'
 import { CHALLENGE_QUESTIONS } from '@/constants'
 import { useScaleStore } from './scale'
+import { useTimer } from '@/composables/useTimer'
+import { usePersistence } from '@/composables/usePersistence'
 
 export interface PendingPracticeState {
   targetWeight: number
@@ -12,13 +14,31 @@ export interface PendingPracticeState {
 export const useGameStore = defineStore('game', () => {
   const gameMode = ref<GameMode>('free')
   const currentQuestionIndex = ref(0)
-  const timeRemaining = ref(0)
-  const isTimerRunning = ref(false)
   const reviewItems = ref<ReviewItem[]>([])
   const challengeScore = ref(0)
   const totalQuestions = ref(0)
   const pendingPractice = ref<PendingPracticeState | null>(null)
-  let timerInterval: number | null = null
+
+  const { timeRemaining, isRunning: isTimerRunning, start, stop, reset: resetTimer, setTime } = useTimer({
+    mode: 'countdown',
+    initialTime: 60,
+    onTimeUp: () => {
+      submitAnswer()
+    }
+  })
+
+  function startTimer() {
+    start()
+  }
+
+  function stopTimer() {
+    stop()
+  }
+
+  const { data: wrongAnswersData, load: loadWrongAnswersPersist, save: saveWrongAnswers, clear: clearWrongAnswersPersist } = usePersistence<ReviewItem[]>({
+    storageKey: 'scaleTrainer_wrongAnswers',
+    defaultValue: []
+  })
 
   const currentQuestion = computed<ChallengeQuestion | null>(() => {
     if (gameMode.value !== 'challenge' && gameMode.value !== 'review') return null
@@ -33,12 +53,11 @@ export const useGameStore = defineStore('game', () => {
 
   function setGameMode(mode: GameMode) {
     gameMode.value = mode
-    stopTimer()
+    stop()
     
     if (mode === 'challenge') {
       startChallenge()
     } else if (mode === 'review') {
-      // 复盘模式保持数据
     } else {
       const scaleStore = useScaleStore()
       scaleStore.reset()
@@ -55,7 +74,7 @@ export const useGameStore = defineStore('game', () => {
 
   function loadQuestion(index: number) {
     if (index >= CHALLENGE_QUESTIONS.length) {
-      stopTimer()
+      stop()
       return
     }
 
@@ -74,32 +93,12 @@ export const useGameStore = defineStore('game', () => {
     }
     scaleStore.currentHerb = herb
 
-    timeRemaining.value = question.timeLimit
-    startTimer()
-  }
-
-  function startTimer() {
-    stopTimer()
-    isTimerRunning.value = true
-    timerInterval = window.setInterval(() => {
-      if (timeRemaining.value > 0) {
-        timeRemaining.value--
-      } else {
-        submitAnswer()
-      }
-    }, 1000)
-  }
-
-  function stopTimer() {
-    if (timerInterval) {
-      clearInterval(timerInterval)
-      timerInterval = null
-    }
-    isTimerRunning.value = false
+    setTime(question.timeLimit)
+    start()
   }
 
   function submitAnswer(): boolean {
-    stopTimer()
+    stop()
     
     const scaleStore = useScaleStore()
     const question = currentQuestion.value
@@ -161,27 +160,16 @@ export const useGameStore = defineStore('game', () => {
 
   function persistWrongAnswers() {
     const wrong = reviewItems.value.filter(item => !item.isCorrect)
-    try {
-      localStorage.setItem('scaleTrainer_wrongAnswers', JSON.stringify(wrong))
-    } catch (e) {
-      console.error('Failed to persist wrong answers:', e)
-    }
+    wrongAnswersData.value = wrong
+    saveWrongAnswers()
   }
 
   function loadWrongAnswers(): ReviewItem[] {
-    try {
-      const stored = localStorage.getItem('scaleTrainer_wrongAnswers')
-      if (stored) {
-        return JSON.parse(stored)
-      }
-    } catch (e) {
-      console.error('Failed to load wrong answers:', e)
-    }
-    return []
+    return loadWrongAnswersPersist()
   }
 
   function clearWrongAnswers() {
-    localStorage.removeItem('scaleTrainer_wrongAnswers')
+    clearWrongAnswersPersist()
     reviewItems.value = reviewItems.value.filter(item => item.isCorrect)
   }
 

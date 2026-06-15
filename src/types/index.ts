@@ -382,3 +382,110 @@ export interface PrescriptionReviewItem {
   result: PrescriptionResult
   herbKeySteps: Map<string, number>
 }
+
+export interface WeighingState {
+  placedWeights: Weight[]
+  herbCount: number
+  currentHerb: Herb | PrescriptionHerb | null
+  targetWeight: number
+  allowedError: number
+  usedWeightIds: Set<string>
+}
+
+export interface WeighingComputed {
+  leftWeight: number
+  rightWeight: number
+  error: number
+  isBalanced: boolean
+  errorPercentage: number
+  placedWeightIds: string[]
+  availableWeights: Weight[]
+}
+
+export interface WeighingActions {
+  addWeight: (weight: Weight) => boolean
+  removeWeight: (weightId: string) => boolean
+  setHerbCount: (count: number) => boolean
+  setCurrentHerb: (herb: Herb | PrescriptionHerb) => void
+  setTargetWeight: (weight: number) => void
+  setAllowedError: (error: number) => void
+  markWeightsUsed: (weights: Weight[]) => void
+  resetWeighing: () => void
+}
+
+export interface HistoryRecordBase {
+  id: number | string
+  timestamp: number
+  type: string
+  description: string
+  leftWeight: number
+  rightWeight: number
+  error: number
+  herbCount: number
+  placedWeights: Weight[]
+}
+
+export interface StepFlowState<TStepId extends string = string> {
+  currentStepIndex: number
+  steps: StepDefinition<TStepId>[]
+  stepResults: Record<TStepId, StepResult>
+}
+
+export interface StepDefinition<TStepId extends string = string> {
+  id: TStepId
+  title: string
+  instruction: string
+  hint?: string
+  maxScore: number
+  allowedSkip: boolean
+  skipPenalty: number
+  minCompletionScore: number
+  autoAdvance?: boolean
+}
+
+export interface StepResult {
+  stepId: string
+  completed: boolean
+  skipped: boolean
+  score: number
+  maxScore: number
+  attempts: number
+  timeSpent: number
+  feedbacks: any[]
+  startTimestamp: number
+  endTimestamp?: number
+}
+
+export interface HerbWeighingResult {
+  herbId: string
+  herbName: string
+  targetWeight: number
+  finalWeight: number
+  finalError: number
+  allowedError: number
+  placedWeights: Weight[]
+  herbCount: number
+  score: number
+  isPerfect: boolean
+  timeSpent: number
+  completed: boolean
+  skipped: boolean
+}
+
+export interface PersistenceOptions<T> {
+  storageKey: string
+  defaultValue: T
+  serialize?: (value: T) => string
+  deserialize?: (str: string) => T
+}
+
+export type TimerMode = 'countdown' | 'countup'
+
+export interface TimerState {
+  timeRemaining: number
+  timeElapsed: number
+  isRunning: boolean
+  isPaused: boolean
+  mode: TimerMode
+  totalTime: number
+}

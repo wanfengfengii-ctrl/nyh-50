@@ -2,72 +2,70 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { Weight, Prescription, PrescriptionHerb, PrescriptionStepRecord, PrescriptionResult } from '@/types'
 import { PRESCRIPTIONS, WEIGHTS } from '@/constants'
+import { useWeighing, useHerbSession, useTimer, usePersistence } from '@/composables'
 
 export const usePrescriptionStore = defineStore('prescription', () => {
   const prescriptions = ref<Prescription[]>(JSON.parse(JSON.stringify(PRESCRIPTIONS)))
   const currentPrescriptionIndex = ref(0)
-  const currentHerbIndex = ref(0)
   const isStarted = ref(false)
   const isCompleted = ref(false)
-  const timeRemaining = ref(0)
-  const startTime = ref(0)
+  const lastResult = ref<PrescriptionResult | null>(null)
   const history = ref<PrescriptionStepRecord[]>([])
   const historyCounter = ref(0)
-  const placedWeights = ref<Weight[]>([])
-  const currentHerbCount = ref(0)
-  const lastResult = ref<PrescriptionResult | null>(null)
-  const prescriptionResults = ref<PrescriptionResult[]>([])
-  const usedWeightIds = ref<Set<string>>(new Set())
-  let timerInterval: number | null = null
+
+  const weighing = useWeighing({
+    trackUsedWeights: true,
+    allWeights: WEIGHTS
+  })
+
+  const herbSession = useHerbSession({
+    herbs: [],
+    onHerbComplete: () => {
+      weighing.markWeightsUsed(weighing.placedWeights.value)
+    },
+    onSessionComplete: () => {
+      completePrescription()
+    }
+  })
+
+  const timer = useTimer({
+    mode: 'countdown',
+    onTimeUp: () => {
+      completePrescription()
+    }
+  })
+
+  const persistence = usePersistence<PrescriptionResult[]>({
+    storageKey: 'scaleTrainer_prescriptionResults',
+    defaultValue: []
+  })
+
+  const prescriptionResults = computed(() => persistence.data.value)
 
   const currentPrescription = computed<Prescription | null>(() => {
     if (currentPrescriptionIndex.value >= prescriptions.value.length) return null
     return prescriptions.value[currentPrescriptionIndex.value]
   })
 
-  const currentHerb = computed<PrescriptionHerb | null>(() => {
-    if (!currentPrescription.value) return null
-    if (currentHerbIndex.value >= currentPrescription.value.herbs.length) return null
-    return currentPrescription.value.herbs[currentHerbIndex.value]
-  })
+  const currentHerb = computed<PrescriptionHerb | null>(() => herbSession.currentHerb.value)
+  const herbs = computed(() => herbSession.sessionHerbs.value)
+  const completedHerbs = computed(() => herbSession.completedHerbs.value)
+  const totalProgress = computed(() => herbSession.totalProgress.value)
 
-  const herbs = computed(() => currentPrescription.value?.herbs || [])
-
-  const completedHerbs = computed(() => herbs.value.filter(h => h.completed).length)
-
-  const totalProgress = computed(() => {
-    if (!currentPrescription.value) return 0
-    return (completedHerbs.value / currentPrescription.value.herbs.length) * 100
-  })
-
-  const placedWeightIds = computed(() => placedWeights.value.map(w => w.id))
-
-  const leftWeight = computed(() => placedWeights.value.reduce((sum, w) => sum + w.weight, 0))
-
-  const rightWeight = computed(() => {
-    if (!currentHerb.value) return 0
-    return currentHerbCount.value * currentHerb.value.unitWeight
-  })
-
-  const currentError = computed(() => leftWeight.value - rightWeight.value)
-
-  const isCurrentBalanced = computed(() => {
-    if (!currentHerb.value) return false
-    return Math.abs(currentError.value) <= currentHerb.value.allowedError
-  })
-
-  const currentErrorPercentage = computed(() => {
-    if (!currentHerb.value || currentHerb.value.targetWeight === 0) return 0
-    return (Math.abs(currentError.value) / currentHerb.value.targetWeight) * 100
-  })
-
-  const allHerbsCompleted = computed(() => {
-    if (!currentPrescription.value) return false
-    return currentPrescription.value.herbs.every(h => h.completed)
-  })
+  const placedWeightIds = computed(() => weighing.placedWeightIds.value)
+  const leftWeight = computed(() => weighing.leftWeight.value)
+  const rightWeight = computed(() => weighing.rightWeight.value)
+  const currentError = computed(() => weighing.error.value)
+  const isCurrentBalanced = computed(() => weighing.isBalanced.value)
+  const currentErrorPercentage = computed(() => weighing.errorPercentage.value)
+  const allHerbsCompleted = computed(() => herbSession.allCompleted.value)
+  const currentHerbCount = computed(() => weighing.herbCount.value)
+  const placedWeights = computed(() => weighing.placedWeights.value)
+  const usedWeightIds = computed(() => weighing.usedWeightIds.value)
+  const timeRemaining = computed(() => timer.timeRemaining.value)
 
   function isWeightUsed(weightId: string): boolean {
-    return usedWeightIds.value.has(weightId)
+    return weighing.isWeightUsed(weightId)
   }
 
   function selectPrescription(index: number) {
@@ -77,26 +75,17 @@ export const usePrescriptionStore = defineStore('prescription', () => {
   }
 
   function resetPrescriptionState() {
-    stopTimer()
+    timer.reset()
     isStarted.value = false
     isCompleted.value = false
-    currentHerbIndex.value = 0
-    placedWeights.value = []
-    currentHerbCount.value = 0
     history.value = []
     historyCounter.value = 0
     lastResult.value = null
-    usedWeightIds.value = new Set()
+    weighing.resetAll()
 
     if (currentPrescription.value) {
-      timeRemaining.value = currentPrescription.value.timeLimit
-      currentPrescription.value.herbs.forEach(h => {
-        h.completed = false
-        h.herbCount = 0
-        h.placedWeights = []
-        h.finalError = 0
-        h.score = 0
-      })
+      timer.setTime(currentPrescription.value.timeLimit)
+      herbSession.updateHerbs(currentPrescription.value.herbs)
     }
   }
 
@@ -104,30 +93,20 @@ export const usePrescriptionStore = defineStore('prescription', () => {
     if (!currentPrescription.value) return
     resetPrescriptionState()
     isStarted.value = true
-    startTime.value = Date.now()
-    startTimer()
+    timer.start()
+
+    herbSession.updateHerbs(currentPrescription.value.herbs)
+    herbSession.startSession()
+
+    const firstHerb = herbSession.currentHerb.value
+    if (firstHerb) {
+      weighing.setCurrentHerb(firstHerb)
+    }
+
     addHistory({
       type: 'switch_herb',
       description: `开始称量 ${currentHerb.value?.herbName}，目标：${currentHerb.value?.targetWeight}钱`
     })
-  }
-
-  function startTimer() {
-    stopTimer()
-    timerInterval = window.setInterval(() => {
-      if (timeRemaining.value > 0) {
-        timeRemaining.value--
-      } else {
-        completePrescription()
-      }
-    }, 1000)
-  }
-
-  function stopTimer() {
-    if (timerInterval) {
-      clearInterval(timerInterval)
-      timerInterval = null
-    }
   }
 
   function selectHerb(index: number) {
@@ -135,20 +114,26 @@ export const usePrescriptionStore = defineStore('prescription', () => {
     if (index < 0 || index >= currentPrescription.value.herbs.length) return
     if (currentPrescription.value.herbs[index].completed) return
 
-    const prevHerb = currentPrescription.value.herbs[currentHerbIndex.value]
+    const prevHerb = currentPrescription.value.herbs[herbSession.currentHerbIndex.value]
     if (prevHerb && !prevHerb.completed) {
-      prevHerb.herbCount = currentHerbCount.value
-      prevHerb.placedWeights = [...placedWeights.value]
+      prevHerb.herbCount = weighing.herbCount.value
+      prevHerb.placedWeights = [...weighing.placedWeights.value]
     }
 
-    currentHerbIndex.value = index
-    const herb = currentPrescription.value.herbs[index]
+    const success = herbSession.selectHerb(index)
+    if (!success) return
+
+    const herb = herbSession.currentHerb.value
+    if (!herb) return
+
     const savedWeights = herb.placedWeights.filter(w => !usedWeightIds.value.has(w.id))
     if (savedWeights.length !== herb.placedWeights.length) {
       herb.placedWeights = savedWeights
     }
-    placedWeights.value = [...savedWeights]
-    currentHerbCount.value = herb.herbCount
+
+    weighing.placedWeights.value = [...savedWeights]
+    weighing.herbCount.value = herb.herbCount
+    weighing.currentHerb.value = herb
 
     addHistory({
       type: 'switch_herb',
@@ -158,10 +143,8 @@ export const usePrescriptionStore = defineStore('prescription', () => {
 
   function addWeight(weight: Weight): boolean {
     if (!currentHerb.value || currentHerb.value.completed) return false
-    if (placedWeightIds.value.includes(weight.id)) return false
-    if (usedWeightIds.value.has(weight.id)) return false
+    if (!weighing.addWeight(weight)) return false
 
-    placedWeights.value.push(weight)
     addHistory({
       type: 'add_weight',
       description: `添加 ${weight.name} 到砝码盘`
@@ -171,11 +154,11 @@ export const usePrescriptionStore = defineStore('prescription', () => {
 
   function removeWeight(weightId: string): boolean {
     if (!currentHerb.value || currentHerb.value.completed) return false
-    const index = placedWeights.value.findIndex(w => w.id === weightId)
-    if (index === -1) return false
+    const weight = weighing.placedWeights.value.find(w => w.id === weightId)
+    if (!weight) return false
 
-    const weight = placedWeights.value[index]
-    placedWeights.value.splice(index, 1)
+    if (!weighing.removeWeight(weightId)) return false
+
     addHistory({
       type: 'remove_weight',
       description: `移除 ${weight.name}`
@@ -186,10 +169,11 @@ export const usePrescriptionStore = defineStore('prescription', () => {
   function setHerbCount(count: number): boolean {
     if (!currentHerb.value || currentHerb.value.completed) return false
     if (count < 0) return false
-    if (count === currentHerbCount.value) return false
+    if (count === weighing.herbCount.value) return false
 
-    const oldCount = currentHerbCount.value
-    currentHerbCount.value = count
+    const oldCount = weighing.herbCount.value
+    if (!weighing.setHerbCount(count)) return false
+
     addHistory({
       type: 'adjust_herb',
       description: `调整药材数量：${oldCount} → ${count}`
@@ -208,11 +192,11 @@ export const usePrescriptionStore = defineStore('prescription', () => {
       herbName: currentHerb.value.herbName,
       type: (partial.type as any) || 'adjust_herb',
       description: partial.description || '',
-      placedWeights: [...placedWeights.value],
-      herbCount: currentHerbCount.value,
-      leftWeight: leftWeight.value,
-      rightWeight: rightWeight.value,
-      error: currentError.value,
+      placedWeights: [...weighing.placedWeights.value],
+      herbCount: weighing.herbCount.value,
+      leftWeight: weighing.leftWeight.value,
+      rightWeight: weighing.rightWeight.value,
+      error: weighing.error.value,
       targetWeight: currentHerb.value.targetWeight
     }
     history.value.push(record)
@@ -223,40 +207,38 @@ export const usePrescriptionStore = defineStore('prescription', () => {
     if (currentHerb.value.completed) return false
 
     const herb = currentHerb.value
-    const error = currentError.value
+    const error = weighing.error.value
     const absError = Math.abs(error)
 
     if (absError > herb.allowedError) {
       return false
     }
 
-    herb.finalError = error
-    herb.herbCount = currentHerbCount.value
-    herb.placedWeights = [...placedWeights.value]
-
-    placedWeights.value.forEach(w => {
-      usedWeightIds.value.add(w.id)
-    })
-
     let score = 0
-    if (absError <= herb.allowedError) {
+    if (absError <= herb.allowedError * 0.1) {
       score = 100
-    } else {
-      const errorRatio = absError / herb.targetWeight
-      score = Math.max(0, Math.round(100 * (1 - errorRatio * 2)))
+    } else if (absError <= herb.allowedError) {
+      const errorRatio = absError / herb.allowedError
+      score = Math.round(100 - errorRatio * 30)
     }
-    herb.score = score
-    herb.completed = true
+
+    const result = herbSession.completeCurrentHerb(
+      weighing.placedWeights.value,
+      weighing.herbCount.value,
+      weighing.rightWeight.value,
+      error,
+      score,
+      absError <= herb.allowedError * 0.1
+    )
+
+    if (!result) return false
 
     addHistory({
       type: 'complete_herb',
       description: `完成 ${herb.herbName} 称量，误差：${error > 0 ? '+' : ''}${error.toFixed(2)}钱，得分：${score}分`
     })
 
-    const nextIndex = currentPrescription.value.herbs.findIndex(h => !h.completed)
-    if (nextIndex !== -1) {
-      selectHerb(nextIndex)
-    } else if (allHerbsCompleted.value) {
+    if (herbSession.allCompleted.value) {
       completePrescription()
     }
 
@@ -267,7 +249,7 @@ export const usePrescriptionStore = defineStore('prescription', () => {
     if (!currentPrescription.value) return
     if (isCompleted.value) return
 
-    stopTimer()
+    timer.stop()
     isCompleted.value = true
 
     const herbResults = currentPrescription.value.herbs.map(herb => {
@@ -317,56 +299,42 @@ export const usePrescriptionStore = defineStore('prescription', () => {
       herbResults,
       bestHerbIndex,
       worstHerbIndex,
-      totalTimeUsed: currentPrescription.value.timeLimit - timeRemaining.value,
+      totalTimeUsed: currentPrescription.value.timeLimit - timer.timeRemaining.value,
       history: JSON.parse(JSON.stringify(history.value))
     }
 
     lastResult.value = result
-    prescriptionResults.value.push(result)
-    persistResults()
+    persistence.data.value.push(result)
+    persistence.save()
   }
 
   function getAvailableWeights(): Weight[] {
-    return WEIGHTS.filter(w => !placedWeightIds.value.includes(w.id) && !usedWeightIds.value.has(w.id))
+    return weighing.availableWeights.value
   }
 
   function getPlacedWeights(): Weight[] {
-    return placedWeights.value
-  }
-
-  function persistResults() {
-    try {
-      const serialized = prescriptionResults.value.map(r => ({
-        ...r,
-        herbKeySteps: {}
-      }))
-      localStorage.setItem('scaleTrainer_prescriptionResults', JSON.stringify(serialized))
-    } catch (e) {
-      console.error('Failed to persist prescription results:', e)
-    }
+    return [...weighing.placedWeights.value]
   }
 
   function loadResults(): PrescriptionResult[] {
-    try {
-      const stored = localStorage.getItem('scaleTrainer_prescriptionResults')
-      if (stored) {
-        return JSON.parse(stored)
-      }
-    } catch (e) {
-      console.error('Failed to load prescription results:', e)
-    }
-    return []
+    return persistence.load()
   }
 
   function clearResults() {
-    localStorage.removeItem('scaleTrainer_prescriptionResults')
-    prescriptionResults.value = []
+    persistence.clear()
+  }
+
+  function init() {
+    persistence.load()
+    if (currentPrescription.value) {
+      herbSession.updateHerbs(currentPrescription.value.herbs)
+    }
   }
 
   return {
     prescriptions,
     currentPrescriptionIndex,
-    currentHerbIndex,
+    currentHerbIndex: herbSession.currentHerbIndex,
     isStarted,
     isCompleted,
     timeRemaining,
@@ -376,6 +344,7 @@ export const usePrescriptionStore = defineStore('prescription', () => {
     lastResult,
     prescriptionResults,
     usedWeightIds,
+
     currentPrescription,
     currentHerb,
     herbs,
@@ -388,10 +357,11 @@ export const usePrescriptionStore = defineStore('prescription', () => {
     isCurrentBalanced,
     currentErrorPercentage,
     allHerbsCompleted,
+
     selectPrescription,
     resetPrescriptionState,
     startPrescription,
-    stopTimer,
+    stopTimer: timer.stop,
     selectHerb,
     addWeight,
     removeWeight,
@@ -402,6 +372,7 @@ export const usePrescriptionStore = defineStore('prescription', () => {
     getPlacedWeights,
     isWeightUsed,
     loadResults,
-    clearResults
+    clearResults,
+    init
   }
 })

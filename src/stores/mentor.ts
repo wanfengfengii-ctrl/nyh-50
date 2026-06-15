@@ -13,7 +13,8 @@ import type {
   ApprenticeProfile,
   ApprendiceSkillRecord,
   ApprenticeAchievement,
-  Weight
+  Weight,
+  Prescription
 } from '@/types'
 import {
   PRESCRIPTIONS,
@@ -27,6 +28,7 @@ import {
   XP_PER_LEVEL
 } from '@/constants'
 import { speakStepInstruction, speakFeedback, stopSpeaking, isVoiceEnabled } from '@/utils/speech'
+import { useWeighing, useStepFlow, useTimer, usePersistence } from '@/composables'
 
 let feedbackCounter = 0
 
@@ -36,29 +38,15 @@ export const useMentorStore = defineStore('mentor', () => {
   const isPaused = ref(false)
 
   const currentPrescriptionIndex = ref(0)
-  const currentHerbIndex = ref(0)
-  const currentStepIndex = ref(0)
   const currentDifficulty = ref<MentorDifficulty>('beginner')
 
   const sessionStartTime = ref(0)
   const sessionEndTime = ref(0)
-  const sessionTimeRemaining = ref(0)
-  let sessionTimer: number | null = null
-
-  const herbStepStartTime = ref(0)
-
-  const placedWeights = ref<Weight[]>([])
-  const currentHerbCount = ref(0)
-  const usedWeightIds = ref<Set<string>>(new Set())
-
-  const stepResults = ref<Record<MentorStepType, MentorStepResult>>(createEmptyStepResults())
-  const currentHerbStepResults = ref<Record<MentorStepType, MentorStepResult>>(createEmptyStepResults())
 
   const sessionFeedbacks = ref<MentorFeedback[]>([])
   const currentFeedbacks = ref<MentorFeedback[]>([])
 
   const herbResults = ref<MentorHerbResult[]>([])
-  const sessionResults = ref<MentorSessionResult[]>([])
   const lastSessionResult = ref<MentorSessionResult | null>(null)
 
   const herbIdentifyAnswerSelected = ref<number | null>(null)
@@ -69,45 +57,37 @@ export const useMentorStore = defineStore('mentor', () => {
   const replayData = ref<MentorReplayFrame[]>([])
   const replayStartTimestamp = ref(0)
 
-  const apprenticeProfile = ref<ApprenticeProfile>(loadProfile())
   const showGuide = ref(true)
 
-  function createEmptyStepResults(): Record<MentorStepType, MentorStepResult> {
-    const result = {} as Record<MentorStepType, MentorStepResult>
-    MENTOR_STEPS.forEach(step => {
-      result[step.id] = {
-        stepId: step.id,
-        completed: false,
-        skipped: false,
-        score: 0,
-        maxScore: step.maxScore,
-        attempts: 0,
-        timeSpent: 0,
-        feedbacks: [],
-        startTimestamp: 0
-      }
-    })
-    return result
-  }
+  const weighing = useWeighing({
+    trackUsedWeights: true,
+    allWeights: WEIGHTS
+  })
 
-  function loadProfile(): ApprenticeProfile {
-    try {
-      const stored = localStorage.getItem('scaleTrainer_apprenticeProfile')
-      if (stored) {
-        const profile = JSON.parse(stored)
-        if (!profile.skills || profile.skills.length === 0) {
-          profile.skills = JSON.parse(JSON.stringify(INITIAL_SKILLS))
-        }
-        if (!profile.achievements || profile.achievements.length === 0) {
-          profile.achievements = JSON.parse(JSON.stringify(INITIAL_ACHIEVEMENTS))
-        }
-        return profile
-      }
-    } catch (e) {
-      console.error('Failed to load apprentice profile:', e)
+  const stepFlow = useStepFlow<MentorStepType>({
+    steps: MENTOR_STEPS,
+    autoAdvance: false
+  })
+
+  const sessionTimer = useTimer({
+    mode: 'countdown',
+    onTimeUp: () => {
+      completeSession()
     }
-    return createDefaultProfile()
-  }
+  })
+
+  const sessionResultsPersistence = usePersistence<MentorSessionResult[]>({
+    storageKey: 'scaleTrainer_mentorSessionResults',
+    defaultValue: []
+  })
+
+  const profilePersistence = usePersistence<ApprenticeProfile>({
+    storageKey: 'scaleTrainer_apprenticeProfile',
+    defaultValue: createDefaultProfile()
+  })
+
+  const apprenticeProfile = computed(() => profilePersistence.data.value)
+  const sessionResults = computed(() => sessionResultsPersistence.data.value)
 
   function createDefaultProfile(): ApprenticeProfile {
     return {
@@ -130,32 +110,35 @@ export const useMentorStore = defineStore('mentor', () => {
     }
   }
 
-  function saveProfile(): void {
+  function loadProfile(): ApprenticeProfile {
     try {
-      localStorage.setItem('scaleTrainer_apprenticeProfile', JSON.stringify(apprenticeProfile.value))
+      const stored = localStorage.getItem('scaleTrainer_apprenticeProfile')
+      if (stored) {
+        const profile = JSON.parse(stored)
+        if (!profile.skills || profile.skills.length === 0) {
+          profile.skills = JSON.parse(JSON.stringify(INITIAL_SKILLS))
+        }
+        if (!profile.achievements || profile.achievements.length === 0) {
+          profile.achievements = JSON.parse(JSON.stringify(INITIAL_ACHIEVEMENTS))
+        }
+        return profile
+      }
     } catch (e) {
-      console.error('Failed to save apprentice profile:', e)
+      console.error('Failed to load apprentice profile:', e)
     }
+    return createDefaultProfile()
+  }
+
+  function saveProfile(): void {
+    profilePersistence.save()
   }
 
   function saveSessionResults(): void {
-    try {
-      localStorage.setItem('scaleTrainer_mentorSessionResults', JSON.stringify(sessionResults.value))
-    } catch (e) {
-      console.error('Failed to save mentor session results:', e)
-    }
+    sessionResultsPersistence.save()
   }
 
   function loadSessionResults(): MentorSessionResult[] {
-    try {
-      const stored = localStorage.getItem('scaleTrainer_mentorSessionResults')
-      if (stored) {
-        return JSON.parse(stored)
-      }
-    } catch (e) {
-      console.error('Failed to load mentor session results:', e)
-    }
-    return []
+    return sessionResultsPersistence.load()
   }
 
   const prescriptions = computed(() => {
@@ -175,48 +158,33 @@ export const useMentorStore = defineStore('mentor', () => {
 
   const currentHerb = computed(() => {
     if (!currentPrescription.value) return null
-    if (currentHerbIndex.value >= currentPrescription.value.herbs.length) return null
-    return currentPrescription.value.herbs[currentHerbIndex.value]
+    if (stepFlow.currentStepIndex.value >= 0) {
+      const herbIndex = Math.floor(herbResults.value.length)
+      if (herbIndex < currentPrescription.value.herbs.length) {
+        return currentPrescription.value.herbs[herbIndex]
+      }
+    }
+    return null
   })
 
-  const currentStep = computed(() => {
-    if (currentStepIndex.value >= MENTOR_STEPS.length) return null
-    return MENTOR_STEPS[currentStepIndex.value]
-  })
-
+  const currentStep = computed(() => stepFlow.currentStep.value)
   const currentHerbQuestion = computed(() => {
     if (!currentHerb.value) return null
     const questions = MENTOR_HERB_QUESTIONS[currentHerb.value.id]
     return questions ? questions[0] : null
   })
 
-  const leftWeight = computed(() => {
-    return placedWeights.value.reduce((sum, w) => sum + w.weight, 0)
-  })
-
-  const rightWeight = computed(() => {
-    if (!currentHerb.value) return 0
-    return currentHerbCount.value * currentHerb.value.unitWeight
-  })
-
-  const currentError = computed(() => leftWeight.value - rightWeight.value)
-
-  const isCurrentBalanced = computed(() => {
-    if (!currentHerb.value) return false
-    return Math.abs(currentError.value) <= currentHerb.value.allowedError
-  })
-
-  const currentErrorPercentage = computed(() => {
-    if (!currentHerb.value || currentHerb.value.targetWeight === 0) return 0
-    return (Math.abs(currentError.value) / currentHerb.value.targetWeight) * 100
-  })
+  const leftWeight = computed(() => weighing.leftWeight.value)
+  const rightWeight = computed(() => weighing.rightWeight.value)
+  const currentError = computed(() => weighing.error.value)
+  const isCurrentBalanced = computed(() => weighing.isBalanced.value)
+  const currentErrorPercentage = computed(() => weighing.errorPercentage.value)
 
   const completedHerbs = computed(() => herbResults.value.length)
-
   const totalHerbs = computed(() => currentPrescription.value?.herbs.length || 0)
 
   const sessionTotalScore = computed(() => {
-    return Object.values(stepResults.value).reduce((sum, r) => sum + r.score, 0)
+    return Object.values(stepFlow.stepResults.value).reduce((sum, r) => sum + r.score, 0)
   })
 
   const sessionMaxScore = computed(() => {
@@ -226,12 +194,12 @@ export const useMentorStore = defineStore('mentor', () => {
 
   const currentStepScore = computed(() => {
     if (!currentStep.value) return 0
-    return currentHerbStepResults.value[currentStep.value.id]?.score || 0
+    return stepFlow.stepResults.value[currentStep.value.id]?.score || 0
   })
 
   const skippedCount = computed(() => {
     let count = 0
-    Object.values(stepResults.value).forEach(r => { if (r.skipped) count++ })
+    Object.values(stepFlow.stepResults.value).forEach(r => { if (r.skipped) count++ })
     return count
   })
 
@@ -264,7 +232,7 @@ export const useMentorStore = defineStore('mentor', () => {
     sessionFeedbacks.value.push(feedback)
 
     if (currentStep.value) {
-      currentHerbStepResults.value[currentStep.value.id].feedbacks.push(feedback)
+      stepFlow.addFeedback(currentStep.value.id, feedback)
     }
 
     speakFeedback(level, message)
@@ -278,8 +246,8 @@ export const useMentorStore = defineStore('mentor', () => {
       timestamp: Date.now() - replayStartTimestamp.value,
       stepId: currentStep.value.id,
       action,
-      placedWeights: [...placedWeights.value],
-      herbCount: currentHerbCount.value,
+      placedWeights: [...weighing.placedWeights.value],
+      herbCount: weighing.herbCount.value,
       leftWeight: leftWeight.value,
       rightWeight: rightWeight.value,
       error: currentError.value,
@@ -304,82 +272,43 @@ export const useMentorStore = defineStore('mentor', () => {
   }
 
   function initializeHerbState(): void {
-    placedWeights.value = []
-    currentHerbCount.value = 0
-    currentHerbStepResults.value = createEmptyStepResults()
+    weighing.resetWeighing(false)
+    stepFlow.resetSteps()
     currentFeedbacks.value = []
     herbIdentifyAnswerSelected.value = null
     herbIdentifyAnswerCorrect.value = null
     balanceJudgmentSelected.value = ''
     balanceJudgmentCorrect.value = null
-    currentStepIndex.value = 0
-    herbStepStartTime.value = Date.now()
-    startCurrentStep()
-  }
+    stepFlow.startCurrentStep()
 
-  function startCurrentStep(): void {
-    if (!currentStep.value) return
-    const stepId = currentStep.value.id
-    if (!currentHerbStepResults.value[stepId].startTimestamp) {
-      currentHerbStepResults.value[stepId].startTimestamp = Date.now()
+    if (currentHerb.value) {
+      weighing.setCurrentHerb(currentHerb.value)
     }
-    speakStepInstruction(currentStep.value.title, currentStep.value.instruction)
-    addReplayFrame(`开始步骤: ${currentStep.value.title}`)
+
+    speakStepInstruction(currentStep.value?.title || '', currentStep.value?.instruction || '')
+    addReplayFrame(`开始步骤: ${currentStep.value?.title}`)
   }
 
   function startSession(): void {
     stopSpeaking()
-    currentHerbIndex.value = 0
     herbResults.value = []
     sessionFeedbacks.value = []
-    stepResults.value = createEmptyStepResults()
     replayData.value = []
     replayStartTimestamp.value = Date.now()
-    usedWeightIds.value = new Set()
+    weighing.usedWeightIds.value = new Set()
 
     isStarted.value = true
     isCompleted.value = false
     isPaused.value = false
 
     sessionStartTime.value = Date.now()
-    sessionTimeRemaining.value = getPrescriptionTimeLimit()
+    sessionTimer.setTime(getPrescriptionTimeLimit())
+    sessionTimer.start()
 
-    startSessionTimer()
     initializeHerbState()
 
     addFeedback('info', '开始学习', `今天学习《${currentPrescription.value?.name}》，共${totalHerbs.value}味药材，祝您好运！`, '按步骤完成每味药材的称量操作')
     addReplayFrame(`开始教学: ${currentPrescription.value?.name}`)
-  }
-
-  function startSessionTimer(): void {
-    if (sessionTimer) clearInterval(sessionTimer)
-    sessionTimer = window.setInterval(() => {
-      if (isPaused.value) return
-      if (sessionTimeRemaining.value > 0) {
-        sessionTimeRemaining.value--
-      } else {
-        completeSession()
-      }
-    }, 1000)
-  }
-
-  function stopSessionTimer(): void {
-    if (sessionTimer) {
-      clearInterval(sessionTimer)
-      sessionTimer = null
-    }
-  }
-
-  function goToStep(stepIndex: number): void {
-    if (stepIndex < 0 || stepIndex >= MENTOR_STEPS.length) return
-    currentStepIndex.value = stepIndex
-    startCurrentStep()
-  }
-
-  function goToNextStep(): void {
-    if (currentStepIndex.value < MENTOR_STEPS.length - 1) {
-      goToStep(currentStepIndex.value + 1)
-    }
   }
 
   function togglePause(): void {
@@ -387,8 +316,10 @@ export const useMentorStore = defineStore('mentor', () => {
     isPaused.value = !isPaused.value
     if (isPaused.value) {
       stopSpeaking()
+      sessionTimer.pause()
       addFeedback('info', '已暂停', '学习已暂停，休息一下吧', '点击继续按钮可恢复学习')
     } else {
+      sessionTimer.resume()
       addFeedback('success', '继续学习', '欢迎回来，继续加油！', '完成当前步骤可获得更高评分')
       if (isVoiceEnabled.value && currentStep.value) {
         speakStepInstruction(currentStep.value.title, currentStep.value.instruction)
@@ -408,45 +339,6 @@ export const useMentorStore = defineStore('mentor', () => {
     }
   }
 
-  function completeCurrentStep(score: number, skipped: boolean = false): void {
-    if (!currentStep.value) return
-    const stepId = currentStep.value.id
-    const step = currentStep.value
-
-    const result = currentHerbStepResults.value[stepId]
-    result.completed = true
-    result.skipped = skipped
-    result.score = Math.max(0, Math.min(step.maxScore, score))
-    result.attempts = result.attempts + 1
-    result.timeSpent = Date.now() - result.startTimestamp
-    result.endTimestamp = Date.now()
-
-    if (!stepResults.value[stepId].startTimestamp) {
-      stepResults.value[stepId].startTimestamp = Date.now()
-    }
-    stepResults.value[stepId].completed = true
-    stepResults.value[stepId].score += result.score
-    stepResults.value[stepId].attempts += result.attempts
-    stepResults.value[stepId].timeSpent += result.timeSpent
-    if (skipped) stepResults.value[stepId].skipped = true
-
-    addReplayFrame(`完成步骤: ${step.title}, 得分: ${result.score}/${step.maxScore}${skipped ? ' (跳步)' : ''}`)
-
-    if (skipped) {
-      addFeedback('warning', '跳步扣分', `您跳过了"${step.title}"，扣减${step.skipPenalty}分`, '建议按照步骤依次练习，打牢基础')
-    } else if (result.score >= step.maxScore) {
-      addFeedback('success', '完美完成', `太棒了！"${step.title}"获得满分${step.maxScore}分！`)
-    } else if (result.score >= step.minCompletionScore) {
-      addFeedback('success', '步骤通过', `"${step.title}"得分${result.score}分，继续加油！`)
-    } else {
-      addFeedback('warning', '勉强通过', `"${step.title}"得分${result.score}分，还有提升空间`)
-    }
-
-    if (step.autoAdvance) {
-      setTimeout(() => goToNextStep(), 1000)
-    }
-  }
-
   function skipCurrentStep(): void {
     if (!currentStep.value) return
     if (!currentStep.value.allowedSkip) {
@@ -454,13 +346,14 @@ export const useMentorStore = defineStore('mentor', () => {
       return
     }
     const penalty = currentStep.value.skipPenalty
-    completeCurrentStep(0, true)
-    currentHerbStepResults.value[currentStep.value.id].score = -penalty
-    stepResults.value[currentStep.value.id].score -= penalty
+    stepFlow.skipStep()
+    if (stepFlow.currentStepResult.value) {
+      stepFlow.currentStepResult.value.score = -penalty
+    }
   }
 
   function confirmPrescriptionSelection(): void {
-    completeCurrentStep(50)
+    stepFlow.completeStep(50)
   }
 
   function answerHerbIdentify(optionIndex: number): void {
@@ -476,7 +369,7 @@ export const useMentorStore = defineStore('mentor', () => {
 
     if (isCorrect) {
       addFeedback('success', '答对了！', '您对这味药材的认识非常准确！')
-      completeCurrentStep(score)
+      stepFlow.completeStep(score)
     } else {
       score = Math.round(step.maxScore * 0.6)
       addFeedback(
@@ -485,7 +378,7 @@ export const useMentorStore = defineStore('mentor', () => {
         `正确答案是：${currentHerbQuestion.value.options[currentHerbQuestion.value.correctOptionIndex]}`,
         '请仔细阅读药材说明，了解其性状和功效'
       )
-      completeCurrentStep(score)
+      stepFlow.completeStep(score)
     }
   }
 
@@ -494,10 +387,8 @@ export const useMentorStore = defineStore('mentor', () => {
       addFeedback('warning', '操作时机不对', '当前不是"选择砝码"步骤，请按步骤操作', '点击上方步骤导航或按提示操作')
       return false
     }
-    if (placedWeights.value.find(w => w.id === weight.id)) return false
-    if (usedWeightIds.value.has(weight.id)) return false
+    if (!weighing.addWeight(weight)) return false
 
-    placedWeights.value.push(weight)
     addReplayFrame(`添加砝码: ${weight.name}`)
     return true
   }
@@ -507,11 +398,11 @@ export const useMentorStore = defineStore('mentor', () => {
       addFeedback('warning', '操作时机不对', '当前不是"选择砝码"步骤，请按步骤操作')
       return false
     }
-    const index = placedWeights.value.findIndex(w => w.id === weightId)
-    if (index === -1) return false
+    const weight = weighing.placedWeights.value.find(w => w.id === weightId)
+    if (!weight) return false
 
-    const weight = placedWeights.value[index]
-    placedWeights.value.splice(index, 1)
+    if (!weighing.removeWeight(weightId)) return false
+
     addReplayFrame(`移除砝码: ${weight.name}`)
     return true
   }
@@ -524,7 +415,7 @@ export const useMentorStore = defineStore('mentor', () => {
     const targetWeight = currentHerb.value.targetWeight
 
     const correctIds = correctCombination.map(w => w.id).sort().join(',')
-    const currentIds = placedWeights.value.map(w => w.id).sort().join(',')
+    const currentIds = weighing.placedWeights.value.map(w => w.id).sort().join(',')
     const currentTotal = leftWeight.value
 
     let score = step.maxScore
@@ -550,7 +441,7 @@ export const useMentorStore = defineStore('mentor', () => {
       }
     }
 
-    completeCurrentStep(score)
+    stepFlow.completeStep(score)
   }
 
   function setHerbCount(count: number): boolean {
@@ -558,12 +449,9 @@ export const useMentorStore = defineStore('mentor', () => {
       addFeedback('warning', '操作时机不对', '当前不是"调整药量"步骤，请按步骤操作')
       return false
     }
-    if (count < 0) return false
-    if (count === currentHerbCount.value) return false
+    if (!weighing.setHerbCount(count)) return false
 
-    const oldCount = currentHerbCount.value
-    currentHerbCount.value = count
-    addReplayFrame(`调整药量: ${oldCount} → ${count}`)
+    addReplayFrame(`调整药量: ${weighing.herbCount.value} → ${count}`)
     return true
   }
 
@@ -597,7 +485,7 @@ export const useMentorStore = defineStore('mentor', () => {
       }
     }
 
-    completeCurrentStep(score)
+    stepFlow.completeStep(score)
   }
 
   function judgeBalance(judgment: 'over' | 'under' | 'balanced'): void {
@@ -633,7 +521,7 @@ export const useMentorStore = defineStore('mentor', () => {
       )
     }
 
-    completeCurrentStep(score)
+    stepFlow.completeStep(score)
   }
 
   function confirmSubmitResult(): void {
@@ -651,7 +539,7 @@ export const useMentorStore = defineStore('mentor', () => {
         `当前误差${error > 0 ? '+' : ''}${error.toFixed(2)}钱，超出允许范围±${allowedError}钱`,
         '请返回调整砝码或药量，使误差在允许范围内'
       )
-      goToStep(2)
+      stepFlow.goToStepById('select_weights')
       return
     }
 
@@ -662,26 +550,27 @@ export const useMentorStore = defineStore('mentor', () => {
       finalWeight: rightWeight.value,
       finalError: error,
       allowedError: allowedError,
-      placedWeights: [...placedWeights.value],
-      herbCount: currentHerbCount.value,
-      score: Object.values(currentHerbStepResults.value).reduce((sum, r) => sum + r.score, 0),
+      placedWeights: [...weighing.placedWeights.value],
+      herbCount: weighing.herbCount.value,
+      score: Object.values(stepFlow.stepResults.value).reduce((sum, r) => sum + r.score, 0),
       isPerfect: absError <= allowedError * 0.1 && errorCount.value === 0,
-      stepResults: JSON.parse(JSON.stringify(currentHerbStepResults.value))
+      stepResults: JSON.parse(JSON.stringify(stepFlow.stepResults.value))
     }
 
     herbResults.value.push(herbResult)
 
-    placedWeights.value.forEach(w => usedWeightIds.value.add(w.id))
+    weighing.markWeightsUsed(weighing.placedWeights.value)
 
     addFeedback('success', '药材完成', `${currentHerb.value.herbName}称量完成，综合得分${herbResult.score}分！`)
     addReplayFrame(`完成药材: ${currentHerb.value.herbName}`)
 
-    completeCurrentStep(step.maxScore)
+    stepFlow.completeStep(step.maxScore)
 
-    const nextIndex = currentPrescription.value.herbs.findIndex((_, idx) => !herbResults.value.find(h => h.herbId === currentPrescription.value!.herbs[idx].id))
+    const nextIndex = currentPrescription.value.herbs.findIndex((_, idx) => 
+      !herbResults.value.find(h => h.herbId === currentPrescription.value!.herbs[idx].id)
+    )
 
     if (nextIndex !== -1) {
-      currentHerbIndex.value = nextIndex
       setTimeout(() => {
         initializeHerbState()
         addFeedback('info', '下一味药材', `现在开始称量：${currentPrescription.value!.herbs[nextIndex].herbName}`)
@@ -695,7 +584,7 @@ export const useMentorStore = defineStore('mentor', () => {
     if (!currentPrescription.value) return
     if (isCompleted.value) return
 
-    stopSessionTimer()
+    sessionTimer.stop()
     stopSpeaking()
     isCompleted.value = true
     sessionEndTime.value = Date.now()
@@ -724,7 +613,7 @@ export const useMentorStore = defineStore('mentor', () => {
       maxScore,
       scorePercentage,
       herbResults: [...herbResults.value],
-      stepResults: JSON.parse(JSON.stringify(stepResults.value)),
+      stepResults: JSON.parse(JSON.stringify(stepFlow.stepResults.value)),
       allFeedbacks: [...sessionFeedbacks.value],
       skippedCount: skippedCount.value,
       errorCount: errorCount.value,
@@ -735,7 +624,7 @@ export const useMentorStore = defineStore('mentor', () => {
     }
 
     lastSessionResult.value = result
-    sessionResults.value.push(result)
+    sessionResultsPersistence.data.value.push(result)
     saveSessionResults()
 
     updateApprenticeProfile(result)
@@ -851,7 +740,7 @@ export const useMentorStore = defineStore('mentor', () => {
   }
 
   function updateApprenticeProfile(result: MentorSessionResult): void {
-    const profile = apprenticeProfile.value
+    const profile = profilePersistence.data.value
 
     profile.totalXP += result.xpEarned
     profile.completedSessions += 1
@@ -924,7 +813,7 @@ export const useMentorStore = defineStore('mentor', () => {
   }
 
   function updateAchievements(result: MentorSessionResult): void {
-    const achievements = apprenticeProfile.value.achievements
+    const achievements = profilePersistence.data.value.achievements
 
     const updateProgress = (id: string, add: number = 1, maxOnce: boolean = false) => {
       const a = achievements.find(x => x.id === id)
@@ -957,44 +846,40 @@ export const useMentorStore = defineStore('mentor', () => {
       updateProgress('speed_demon', 1, true)
     }
 
-    const unlockedCount = apprenticeProfile.value.unlockedPrescriptions.length
+    const unlockedCount = profilePersistence.data.value.unlockedPrescriptions.length
     if (unlockedCount >= 1) updateProgress('all_prescriptions', unlockedCount, true)
 
-    if (apprenticeProfile.value.unlockedDifficulties.includes('intermediate')) {
+    if (profilePersistence.data.value.unlockedDifficulties.includes('intermediate')) {
       updateProgress('unlock_intermediate', 1, true)
     }
-    if (apprenticeProfile.value.unlockedDifficulties.includes('advanced')) {
+    if (profilePersistence.data.value.unlockedDifficulties.includes('advanced')) {
       updateProgress('unlock_advanced', 1, true)
     }
-    if (apprenticeProfile.value.unlockedDifficulties.includes('expert')) {
+    if (profilePersistence.data.value.unlockedDifficulties.includes('expert')) {
       updateProgress('unlock_expert', 1, true)
     }
   }
 
   function isWeightUsed(weightId: string): boolean {
-    return usedWeightIds.value.has(weightId)
+    return weighing.isWeightUsed(weightId)
   }
 
   function isWeightPlaced(weightId: string): boolean {
-    return placedWeights.value.some(w => w.id === weightId)
+    return weighing.isWeightPlaced(weightId)
   }
 
   function getAvailableWeights(): Weight[] {
-    return WEIGHTS.filter(w => !isWeightPlaced(w.id) && !isWeightUsed(w.id))
+    return weighing.availableWeights.value
   }
 
   function resetAll(): void {
-    stopSessionTimer()
+    sessionTimer.stop()
     stopSpeaking()
     isStarted.value = false
     isCompleted.value = false
     isPaused.value = false
-    currentStepIndex.value = 0
-    placedWeights.value = []
-    currentHerbCount.value = 0
-    usedWeightIds.value = new Set()
-    stepResults.value = createEmptyStepResults()
-    currentHerbStepResults.value = createEmptyStepResults()
+    weighing.resetAll()
+    stepFlow.resetSteps()
     sessionFeedbacks.value = []
     currentFeedbacks.value = []
     herbResults.value = []
@@ -1007,16 +892,19 @@ export const useMentorStore = defineStore('mentor', () => {
   }
 
   function init(): void {
-    sessionResults.value = loadSessionResults()
+    profilePersistence.load()
+    sessionResultsPersistence.load()
+    
+    if (!profilePersistence.data.value.skills || profilePersistence.data.value.skills.length === 0) {
+      profilePersistence.data.value.skills = JSON.parse(JSON.stringify(INITIAL_SKILLS))
+    }
+    if (!profilePersistence.data.value.achievements || profilePersistence.data.value.achievements.length === 0) {
+      profilePersistence.data.value.achievements = JSON.parse(JSON.stringify(INITIAL_ACHIEVEMENTS))
+    }
   }
 
   function clearSessionHistory(): void {
-    sessionResults.value = []
-    try {
-      localStorage.removeItem('scaleTrainer_mentorSessionResults')
-    } catch (e) {
-      console.error('Failed to clear session history:', e)
-    }
+    sessionResultsPersistence.clear()
   }
 
   const sessionHistory = computed(() => sessionResults.value)
@@ -1026,15 +914,15 @@ export const useMentorStore = defineStore('mentor', () => {
     isCompleted,
     isPaused,
     currentPrescriptionIndex,
-    currentHerbIndex,
-    currentStepIndex,
+    currentHerbIndex: ref(0),
+    currentStepIndex: stepFlow.currentStepIndex,
     currentDifficulty,
-    sessionTimeRemaining,
-    placedWeights,
-    currentHerbCount,
-    usedWeightIds,
-    stepResults,
-    currentHerbStepResults,
+    sessionTimeRemaining: sessionTimer.timeRemaining,
+    placedWeights: weighing.placedWeights,
+    currentHerbCount: weighing.herbCount,
+    usedWeightIds: weighing.usedWeightIds,
+    stepResults: stepFlow.stepResults,
+    currentHerbStepResults: stepFlow.stepResults,
     sessionFeedbacks,
     currentFeedbacks,
     herbResults,
@@ -1052,7 +940,7 @@ export const useMentorStore = defineStore('mentor', () => {
     prescriptions,
     currentPrescription,
     currentHerb,
-    currentStep,
+    currentStep: stepFlow.currentStep,
     currentHerbQuestion,
     leftWeight,
     rightWeight,
@@ -1074,8 +962,8 @@ export const useMentorStore = defineStore('mentor', () => {
     togglePause,
     pauseSession,
     resumeSession,
-    goToStep,
-    goToNextStep,
+    goToStep: stepFlow.goToStep,
+    goToNextStep: stepFlow.goToNextStep,
     skipCurrentStep,
     confirmPrescriptionSelection,
     answerHerbIdentify,
