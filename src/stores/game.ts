@@ -1,8 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { GameMode, ChallengeQuestion, ReviewItem, Weight } from '@/types'
+import type { GameMode, ChallengeQuestion, ReviewItem, Weight, Herb } from '@/types'
 import { CHALLENGE_QUESTIONS } from '@/constants'
 import { useScaleStore } from './scale'
+
+export interface PendingPracticeState {
+  targetWeight: number
+  herb: Herb
+}
 
 export const useGameStore = defineStore('game', () => {
   const gameMode = ref<GameMode>('free')
@@ -12,6 +17,7 @@ export const useGameStore = defineStore('game', () => {
   const reviewItems = ref<ReviewItem[]>([])
   const challengeScore = ref(0)
   const totalQuestions = ref(0)
+  const pendingPractice = ref<PendingPracticeState | null>(null)
   let timerInterval: number | null = null
 
   const currentQuestion = computed<ChallengeQuestion | null>(() => {
@@ -130,6 +136,8 @@ export const useGameStore = defineStore('game', () => {
 
     reviewItems.value.push(reviewItem)
 
+    persistWrongAnswers()
+
     return isCorrect
   }
 
@@ -151,6 +159,32 @@ export const useGameStore = defineStore('game', () => {
     reviewItems.value = items
   }
 
+  function persistWrongAnswers() {
+    const wrong = reviewItems.value.filter(item => !item.isCorrect)
+    try {
+      localStorage.setItem('scaleTrainer_wrongAnswers', JSON.stringify(wrong))
+    } catch (e) {
+      console.error('Failed to persist wrong answers:', e)
+    }
+  }
+
+  function loadWrongAnswers(): ReviewItem[] {
+    try {
+      const stored = localStorage.getItem('scaleTrainer_wrongAnswers')
+      if (stored) {
+        return JSON.parse(stored)
+      }
+    } catch (e) {
+      console.error('Failed to load wrong answers:', e)
+    }
+    return []
+  }
+
+  function clearWrongAnswers() {
+    localStorage.removeItem('scaleTrainer_wrongAnswers')
+    reviewItems.value = reviewItems.value.filter(item => item.isCorrect)
+  }
+
   return {
     gameMode,
     currentQuestionIndex,
@@ -159,6 +193,7 @@ export const useGameStore = defineStore('game', () => {
     reviewItems,
     challengeScore,
     totalQuestions,
+    pendingPractice,
     currentQuestion,
     progress,
     setGameMode,
@@ -170,6 +205,9 @@ export const useGameStore = defineStore('game', () => {
     nextQuestion,
     isLastQuestion,
     getWrongAnswers,
-    setReviewItems
+    setReviewItems,
+    persistWrongAnswers,
+    loadWrongAnswers,
+    clearWrongAnswers
   }
 })

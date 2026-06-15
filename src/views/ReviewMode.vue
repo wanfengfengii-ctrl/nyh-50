@@ -81,22 +81,32 @@
 
             <div class="analysis-card reference">
               <h4>正确组合</h4>
-              <div class="answer-weights">
-                <span
-                  v-for="w in currentReviewItem.question.bestSolution"
-                  :key="w.id"
-                  class="weight-tag correct"
-                  :style="{ background: w.color }"
-                >
-                  {{ w.name }}
-                </span>
-              </div>
-              <div class="answer-total">
-                总重：{{ getBestSolutionTotal() }} 钱
-              </div>
-              <div class="answer-tip">
-                提示：通过调整药材数量使秤杆平衡
-              </div>
+              <template v-if="showAnswer">
+                <div class="answer-weights">
+                  <span
+                    v-for="w in currentReviewItem.question.bestSolution"
+                    :key="w.id"
+                    class="weight-tag correct"
+                    :style="{ background: w.color }"
+                  >
+                    {{ w.name }}
+                  </span>
+                </div>
+                <div class="answer-total">
+                  总重：{{ getBestSolutionTotal() }} 钱
+                </div>
+                <div class="answer-tip">
+                  提示：通过调整药材数量使秤杆平衡
+                </div>
+              </template>
+              <template v-else>
+                <div class="answer-hidden">
+                  <p>点击下方按钮查看正确组合</p>
+                  <n-button size="small" @click="showAnswer = true" type="primary" color="#2E8B57">
+                    显示正确答案
+                  </n-button>
+                </div>
+              </template>
             </div>
           </div>
 
@@ -168,6 +178,7 @@ const scaleStore = useScaleStore()
 
 const reviewItems = ref<ReviewItem[]>([])
 const currentReviewIndex = ref(0)
+const showAnswer = ref(false)
 
 const currentReviewItem = computed(() => {
   if (reviewItems.value.length === 0) return null
@@ -196,34 +207,36 @@ function getBestSolutionTotal(): string {
 
 function selectReview(index: number) {
   currentReviewIndex.value = index
+  showAnswer.value = false
 }
 
 function prevReview() {
   if (currentReviewIndex.value > 0) {
     currentReviewIndex.value--
+    showAnswer.value = false
   }
 }
 
 function nextReview() {
   if (currentReviewIndex.value < reviewItems.value.length - 1) {
     currentReviewIndex.value++
+    showAnswer.value = false
   }
 }
 
 function practiceAgain() {
   if (!currentReviewItem.value) return
-  
-  scaleStore.reset()
-  scaleStore.setTargetWeight(currentReviewItem.value.question.targetWeight)
-  
-  const herb = {
-    id: 'rv',
-    name: currentReviewItem.value.question.herbName,
-    unitWeight: currentReviewItem.value.question.herbUnitWeight,
-    color: '#8B7355'
+
+  gameStore.pendingPractice = {
+    targetWeight: currentReviewItem.value.question.targetWeight,
+    herb: {
+      id: 'rv',
+      name: currentReviewItem.value.question.herbName,
+      unitWeight: currentReviewItem.value.question.herbUnitWeight,
+      color: '#8B7355'
+    }
   }
-  scaleStore.currentHerb = herb
-  
+
   gameStore.setGameMode('free')
   router.push('/free')
 }
@@ -239,14 +252,7 @@ onMounted(() => {
   if (wrongAnswers.length > 0) {
     reviewItems.value = wrongAnswers
   } else {
-    const stored = localStorage.getItem('reviewItems')
-    if (stored) {
-      try {
-        reviewItems.value = JSON.parse(stored)
-      } catch (e) {
-        console.error('Failed to parse review items:', e)
-      }
-    }
+    reviewItems.value = gameStore.loadWrongAnswers()
   }
 })
 </script>
@@ -527,6 +533,20 @@ onMounted(() => {
   font-size: 12px;
   color: #6B8E23;
   font-style: italic;
+}
+
+.answer-hidden {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 0;
+}
+
+.answer-hidden p {
+  font-size: 13px;
+  color: #999;
+  margin: 0;
 }
 
 .steps-section {

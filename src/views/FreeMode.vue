@@ -32,6 +32,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useScaleStore } from '@/stores/scale'
+import { useGameStore } from '@/stores/game'
 import ScaleSimulation from '@/components/ScaleSimulation.vue'
 import WeightPanel from '@/components/WeightPanel.vue'
 import HerbPanel from '@/components/HerbPanel.vue'
@@ -39,6 +40,7 @@ import ControlPanel from '@/components/ControlPanel.vue'
 import type { Weight } from '@/types'
 
 const scaleStore = useScaleStore()
+const gameStore = useGameStore()
 
 function handleDragStart(weight: Weight) {
   console.log('Drag started:', weight.name)
@@ -49,7 +51,15 @@ function handleDragEnd() {
 }
 
 onMounted(() => {
-  scaleStore.reset()
+  if (gameStore.pendingPractice) {
+    const state = gameStore.pendingPractice
+    scaleStore.reset()
+    scaleStore.setTargetWeight(state.targetWeight)
+    scaleStore.currentHerb = state.herb
+    gameStore.pendingPractice = null
+  } else {
+    scaleStore.reset()
+  }
 })
 </script>
 

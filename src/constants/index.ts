@@ -25,8 +25,8 @@ export const CHALLENGE_QUESTIONS: ChallengeQuestion[] = [
     herbUnitWeight: 0.5,
     timeLimit: 60,
     bestSolution: [
-      { id: 'w2', weight: 5, name: '5钱', color: '#8B4513' },
-      { id: 'w3', weight: 2, name: '2钱', color: '#D2691E' },
+      { id: 'w3', weight: 5, name: '5钱', color: '#8B4513' },
+      { id: 'w2', weight: 2, name: '2钱', color: '#D2691E' },
       { id: 'w1', weight: 1, name: '1钱', color: '#CD853F' }
     ]
   },
@@ -49,26 +49,26 @@ export const CHALLENGE_QUESTIONS: ChallengeQuestion[] = [
     timeLimit: 120,
     bestSolution: [
       { id: 'w5', weight: 20, name: '2两', color: '#6B4423' },
-      { id: 'w4', weight: 5, name: '5钱', color: '#8B4513' },
+      { id: 'w3', weight: 5, name: '5钱', color: '#8B4513' },
       { id: 'w2', weight: 2, name: '2钱', color: '#D2691E' }
     ]
   },
   {
     id: 4,
-    targetWeight: 3.7,
+    targetWeight: 7,
     herbName: '枸杞',
-    herbUnitWeight: 0.1,
+    herbUnitWeight: 0.5,
     timeLimit: 60,
     bestSolution: [
-      { id: 'w3', weight: 2, name: '2钱', color: '#D2691E' },
-      { id: 'w2', weight: 1, name: '1钱', color: '#CD853F' }
+      { id: 'w3', weight: 5, name: '5钱', color: '#8B4513' },
+      { id: 'w2', weight: 2, name: '2钱', color: '#D2691E' }
     ]
   },
   {
     id: 5,
-    targetWeight: 42,
+    targetWeight: 50,
     herbName: '甘草',
-    herbUnitWeight: 0.2,
+    herbUnitWeight: 1,
     timeLimit: 150,
     bestSolution: [
       { id: 'w6', weight: 50, name: '5两', color: '#4A2C17' }
