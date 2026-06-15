@@ -19,7 +19,177 @@ export interface Herb {
   color: string
 }
 
-export type GameMode = 'free' | 'challenge' | 'review' | 'prescription' | 'prescription-review'
+export type GameMode = 'free' | 'challenge' | 'review' | 'prescription' | 'prescription-review' | 'mentor' | 'mentor-review'
+
+export type MentorStepType = 
+  | 'select_prescription'
+  | 'identify_herb'
+  | 'select_weights'
+  | 'adjust_herb_count'
+  | 'judge_balance'
+  | 'submit_result'
+
+export type MentorDifficulty = 'beginner' | 'intermediate' | 'advanced' | 'expert'
+
+export type MentorFeedbackLevel = 'success' | 'warning' | 'error' | 'info'
+
+export interface MentorStep {
+  id: MentorStepType
+  title: string
+  instruction: string
+  hint: string
+  maxScore: number
+  allowedSkip: boolean
+  skipPenalty: number
+  minCompletionScore: number
+  autoAdvance?: boolean
+}
+
+export interface MentorStepResult {
+  stepId: MentorStepType
+  completed: boolean
+  skipped: boolean
+  score: number
+  maxScore: number
+  attempts: number
+  timeSpent: number
+  feedbacks: MentorFeedback[]
+  startTimestamp: number
+  endTimestamp?: number
+}
+
+export interface MentorFeedback {
+  id: number
+  timestamp: number
+  level: MentorFeedbackLevel
+  title: string
+  message: string
+  suggestion?: string
+  relatedAction?: string
+}
+
+export interface MentorHerbQuestion {
+  herbId: string
+  herbName: string
+  color: string
+  unitWeight: number
+  targetWeight: number
+  allowedError: number
+  description: string
+  question: string
+  options: string[]
+  correctOptionIndex: number
+  correctWeightCombination: Weight[]
+}
+
+export interface MentorBalanceQuestion {
+  leftWeight: number
+  rightWeight: number
+  allowedError: number
+  targetWeight: number
+  question: string
+  options: { label: string; value: 'over' | 'under' | 'balanced' }[]
+  correctValue: 'over' | 'under' | 'balanced'
+}
+
+export interface ApprendiceSkillRecord {
+  id: string
+  name: string
+  level: number
+  maxLevel: number
+  xp: number
+  nextLevelXP: number
+  description: string
+  icon: string
+}
+
+export interface ApprenticeProfile {
+  id: string
+  name: string
+  avatar: string
+  totalXP: number
+  level: number
+  title: string
+  unlockedDifficulties: MentorDifficulty[]
+  completedSessions: number
+  totalScore: number
+  perfectSessions: number
+  totalTimeSpent: number
+  skills: ApprendiceSkillRecord[]
+  achievements: ApprenticeAchievement[]
+  unlockedPrescriptions: number[]
+  createdAt: number
+  lastActiveAt: number
+}
+
+export interface ApprenticeAchievement {
+  id: string
+  name: string
+  description: string
+  icon: string
+  unlocked: boolean
+  unlockedAt?: number
+  progress?: number
+  maxProgress?: number
+}
+
+export interface MentorSessionResult {
+  id: string
+  prescriptionId: number
+  prescriptionName: string
+  difficulty: MentorDifficulty
+  startTime: number
+  endTime: number
+  totalTime: number
+  totalScore: number
+  maxScore: number
+  scorePercentage: number
+  herbResults: MentorHerbResult[]
+  stepResults: MentorStepResult[]
+  allFeedbacks: MentorFeedback[]
+  skippedCount: number
+  errorCount: number
+  xpEarned: number
+  skillsImproved: string[]
+  replayData: MentorReplayFrame[]
+  summary: MentorSessionSummary
+}
+
+export interface MentorHerbResult {
+  herbId: string
+  herbName: string
+  targetWeight: number
+  finalWeight: number
+  finalError: number
+  allowedError: number
+  placedWeights: Weight[]
+  herbCount: number
+  score: number
+  isPerfect: boolean
+  stepResults: Record<string, MentorStepResult>
+}
+
+export interface MentorReplayFrame {
+  timestamp: number
+  stepId: MentorStepType
+  action: string
+  placedWeights: Weight[]
+  herbCount: number
+  leftWeight: number
+  rightWeight: number
+  error: number
+  currentHerbId?: string
+  feedback?: MentorFeedback
+}
+
+export interface MentorSessionSummary {
+  highlights: string[]
+  weakPoints: string[]
+  suggestions: string[]
+  nextGoals: string[]
+  difficultyRecommendation: MentorDifficulty
+  overallComment: string
+}
 
 export interface HistoryRecord {
   id: number

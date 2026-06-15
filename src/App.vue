@@ -61,8 +61,10 @@ const tabs = [
   { path: '/free', label: '自由练习', icon: PlayOutline },
   { path: '/challenge', label: '限时挑战', icon: TrophyOutline },
   { path: '/prescription', label: '处方配伍', icon: RefreshOutline },
+  { path: '/mentor', label: '师徒教学', icon: BookOutline },
   { path: '/review', label: '错题复盘', icon: BookOutline },
-  { path: '/prescription-review', label: '处方复盘', icon: CheckmarkCircleOutline }
+  { path: '/prescription-review', label: '处方复盘', icon: CheckmarkCircleOutline },
+  { path: '/mentor-review', label: '成长记录', icon: TrophyOutline }
 ]
 
 function goTo(path: string) {

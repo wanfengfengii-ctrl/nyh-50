@@ -4,6 +4,8 @@ import ChallengeMode from '@/views/ChallengeMode.vue'
 import ReviewMode from '@/views/ReviewMode.vue'
 import PrescriptionMode from '@/views/PrescriptionMode.vue'
 import PrescriptionReviewMode from '@/views/PrescriptionReviewMode.vue'
+import MentorMode from '@/views/MentorMode.vue'
+import MentorReviewMode from '@/views/MentorReviewMode.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -25,22 +27,34 @@ const router = createRouter({
       meta: { title: '限时挑战' }
     },
     {
-      path: '/review',
-      name: 'review',
-      component: ReviewMode,
-      meta: { title: '错题复盘' }
-    },
-    {
       path: '/prescription',
       name: 'prescription',
       component: PrescriptionMode,
       meta: { title: '处方配伍' }
     },
     {
+      path: '/mentor',
+      name: 'mentor',
+      component: MentorMode,
+      meta: { title: '师徒教学' }
+    },
+    {
+      path: '/review',
+      name: 'review',
+      component: ReviewMode,
+      meta: { title: '错题复盘' }
+    },
+    {
       path: '/prescription-review',
       name: 'prescription-review',
       component: PrescriptionReviewMode,
       meta: { title: '处方复盘' }
+    },
+    {
+      path: '/mentor-review',
+      name: 'mentor-review',
+      component: MentorReviewMode,
+      meta: { title: '成长记录' }
     }
   ]
 })
