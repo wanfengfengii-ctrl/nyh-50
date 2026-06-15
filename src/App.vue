@@ -47,7 +47,9 @@ import {
   ScaleOutline, 
   PlayOutline, 
   TrophyOutline, 
-  BookOutline 
+  BookOutline,
+  CheckmarkCircleOutline,
+  RefreshOutline
 } from '@vicons/ionicons5'
 
 const route = useRoute()
@@ -58,7 +60,9 @@ const currentRoute = computed(() => route.path)
 const tabs = [
   { path: '/free', label: '自由练习', icon: PlayOutline },
   { path: '/challenge', label: '限时挑战', icon: TrophyOutline },
-  { path: '/review', label: '错题复盘', icon: BookOutline }
+  { path: '/prescription', label: '处方配伍', icon: RefreshOutline },
+  { path: '/review', label: '错题复盘', icon: BookOutline },
+  { path: '/prescription-review', label: '处方复盘', icon: CheckmarkCircleOutline }
 ]
 
 function goTo(path: string) {

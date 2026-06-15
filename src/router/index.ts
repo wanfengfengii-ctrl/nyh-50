@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router'
 import FreeMode from '@/views/FreeMode.vue'
 import ChallengeMode from '@/views/ChallengeMode.vue'
 import ReviewMode from '@/views/ReviewMode.vue'
+import PrescriptionMode from '@/views/PrescriptionMode.vue'
+import PrescriptionReviewMode from '@/views/PrescriptionReviewMode.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -27,6 +29,18 @@ const router = createRouter({
       name: 'review',
       component: ReviewMode,
       meta: { title: '错题复盘' }
+    },
+    {
+      path: '/prescription',
+      name: 'prescription',
+      component: PrescriptionMode,
+      meta: { title: '处方配伍' }
+    },
+    {
+      path: '/prescription-review',
+      name: 'prescription-review',
+      component: PrescriptionReviewMode,
+      meta: { title: '处方复盘' }
     }
   ]
 })
