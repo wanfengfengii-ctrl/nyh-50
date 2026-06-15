@@ -299,7 +299,7 @@
               size="large" 
               block
               @click="completeHerb"
-              :disabled="currentHerb.completed"
+              :disabled="currentHerb.completed || !prescriptionStore.isCurrentBalanced"
               :color="prescriptionStore.isCurrentBalanced ? '#2E8B57' : '#DAA520'"
             >
               <template #icon>
@@ -307,7 +307,7 @@
               </template>
               {{ currentHerb.completed ? '已完成' : '确认此味药材' }}
               <span v-if="!prescriptionStore.isCurrentBalanced && !currentHerb.completed" class="btn-hint">
-                (误差超出允许范围)
+                (误差超出允许范围，无法确认)
               </span>
             </n-button>
           </div>

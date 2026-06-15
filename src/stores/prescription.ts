@@ -17,6 +17,7 @@ export const usePrescriptionStore = defineStore('prescription', () => {
   const currentHerbCount = ref(0)
   const lastResult = ref<PrescriptionResult | null>(null)
   const prescriptionResults = ref<PrescriptionResult[]>([])
+  const usedWeightIds = ref<Set<string>>(new Set())
   let timerInterval: number | null = null
 
   const currentPrescription = computed<Prescription | null>(() => {
@@ -65,6 +66,10 @@ export const usePrescriptionStore = defineStore('prescription', () => {
     return currentPrescription.value.herbs.every(h => h.completed)
   })
 
+  function isWeightUsed(weightId: string): boolean {
+    return usedWeightIds.value.has(weightId)
+  }
+
   function selectPrescription(index: number) {
     if (index < 0 || index >= prescriptions.value.length) return
     currentPrescriptionIndex.value = index
@@ -81,6 +86,7 @@ export const usePrescriptionStore = defineStore('prescription', () => {
     history.value = []
     historyCounter.value = 0
     lastResult.value = null
+    usedWeightIds.value = new Set()
 
     if (currentPrescription.value) {
       timeRemaining.value = currentPrescription.value.timeLimit
@@ -137,7 +143,11 @@ export const usePrescriptionStore = defineStore('prescription', () => {
 
     currentHerbIndex.value = index
     const herb = currentPrescription.value.herbs[index]
-    placedWeights.value = [...herb.placedWeights]
+    const savedWeights = herb.placedWeights.filter(w => !usedWeightIds.value.has(w.id))
+    if (savedWeights.length !== herb.placedWeights.length) {
+      herb.placedWeights = savedWeights
+    }
+    placedWeights.value = [...savedWeights]
     currentHerbCount.value = herb.herbCount
 
     addHistory({
@@ -149,6 +159,7 @@ export const usePrescriptionStore = defineStore('prescription', () => {
   function addWeight(weight: Weight): boolean {
     if (!currentHerb.value || currentHerb.value.completed) return false
     if (placedWeightIds.value.includes(weight.id)) return false
+    if (usedWeightIds.value.has(weight.id)) return false
 
     placedWeights.value.push(weight)
     addHistory({
@@ -214,9 +225,18 @@ export const usePrescriptionStore = defineStore('prescription', () => {
     const herb = currentHerb.value
     const error = currentError.value
     const absError = Math.abs(error)
+
+    if (absError > herb.allowedError) {
+      return false
+    }
+
     herb.finalError = error
     herb.herbCount = currentHerbCount.value
     herb.placedWeights = [...placedWeights.value]
+
+    placedWeights.value.forEach(w => {
+      usedWeightIds.value.add(w.id)
+    })
 
     let score = 0
     if (absError <= herb.allowedError) {
@@ -307,7 +327,7 @@ export const usePrescriptionStore = defineStore('prescription', () => {
   }
 
   function getAvailableWeights(): Weight[] {
-    return WEIGHTS.filter(w => !placedWeightIds.value.includes(w.id))
+    return WEIGHTS.filter(w => !placedWeightIds.value.includes(w.id) && !usedWeightIds.value.has(w.id))
   }
 
   function getPlacedWeights(): Weight[] {
@@ -355,6 +375,7 @@ export const usePrescriptionStore = defineStore('prescription', () => {
     currentHerbCount,
     lastResult,
     prescriptionResults,
+    usedWeightIds,
     currentPrescription,
     currentHerb,
     herbs,
@@ -379,6 +400,7 @@ export const usePrescriptionStore = defineStore('prescription', () => {
     completePrescription,
     getAvailableWeights,
     getPlacedWeights,
+    isWeightUsed,
     loadResults,
     clearResults
   }

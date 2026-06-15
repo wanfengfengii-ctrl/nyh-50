@@ -7,11 +7,30 @@
         v-for="weight in weights"
         :key="weight.id"
         class="weight-item"
-        :class="{ disabled: isWeightPlaced(weight.id) }"
-        :style="{ background: weight.color }"
+        :class="{ 
+          placed: isWeightPlaced(weight.id),
+          used: isWeightUsed(weight.id)
+        }"
+        :style="{ background: getWeightBgColor(weight) }"
         @click="handleWeightClick(weight)"
       >
         <span class="weight-name">{{ weight.name }}</span>
+        <span v-if="isWeightUsed(weight.id)" class="lock-badge">🔒</span>
+      </div>
+    </div>
+
+    <div class="legend-section">
+      <div class="legend-item">
+        <span class="legend-dot available"></span>
+        <span>可用</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-dot placed"></span>
+        <span>当前已放</span>
+      </div>
+      <div class="legend-item">
+        <span class="legend-dot used"></span>
+        <span>已被占用</span>
       </div>
     </div>
 
@@ -43,7 +62,7 @@
     <div class="tips-section">
       <n-alert type="info" :show-icon="true" size="small">
         <template #default>
-          提示：砝码在各味药材之间独立使用，切换药材时砝码会自动还原。
+          提示：砝码为整张处方共享资源，已完成的药味占用的砝码不可再用；切换药味时会保留该药味之前的操作状态。
         </template>
       </n-alert>
     </div>
@@ -69,7 +88,22 @@ function isWeightPlaced(id: string): boolean {
   return prescriptionStore.placedWeightIds.includes(id)
 }
 
+function isWeightUsed(id: string): boolean {
+  return prescriptionStore.isWeightUsed(id)
+}
+
+function getWeightBgColor(weight: Weight): string {
+  if (isWeightUsed(weight.id)) {
+    return '#9E9E9E'
+  }
+  if (isWeightPlaced(weight.id)) {
+    return weight.color
+  }
+  return weight.color
+}
+
 function handleWeightClick(weight: Weight) {
+  if (isWeightUsed(weight.id)) return
   if (isWeightPlaced(weight.id)) {
     prescriptionStore.removeWeight(weight.id)
   } else {
@@ -115,8 +149,10 @@ function handleRemoveWeight(id: string) {
   aspect-ratio: 1;
   border-radius: 8px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 2px;
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
@@ -125,19 +161,24 @@ function handleRemoveWeight(id: string) {
   user-select: none;
 }
 
-.weight-item:hover:not(.disabled) {
+.weight-item:hover:not(.used):not(.placed) {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
-.weight-item:active:not(.disabled) {
+.weight-item:active:not(.used):not(.placed) {
   transform: translateY(0);
 }
 
-.weight-item.disabled {
-  opacity: 0.3;
+.weight-item.placed {
+  border-color: #2E8B57;
+  box-shadow: 0 0 0 3px rgba(46, 139, 87, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.weight-item.used {
+  opacity: 0.5;
   cursor: not-allowed;
-  filter: grayscale(50%);
+  border-color: #666;
 }
 
 .weight-name {
@@ -145,6 +186,48 @@ function handleRemoveWeight(id: string) {
   font-size: 13px;
   font-weight: 600;
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.lock-badge {
+  font-size: 10px;
+}
+
+.legend-section {
+  display: flex;
+  justify-content: space-around;
+  padding: 8px 4px;
+  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #6B4423;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid #4A2C17;
+}
+
+.legend-dot.available {
+  background: #CD853F;
+}
+
+.legend-dot.placed {
+  background: #8B4513;
+  box-shadow: 0 0 0 2px rgba(46, 139, 87, 0.4);
+}
+
+.legend-dot.used {
+  background: #9E9E9E;
+  opacity: 0.5;
 }
 
 .placed-section {
